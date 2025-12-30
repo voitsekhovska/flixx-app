@@ -1,16 +1,43 @@
 const global = {
   currentPage: window.location.pathname,
+  search: {
+    term: "",
+    type: "",
+    page: 1,
+    totalPages: 1,
+    totalResults: 0,
+  },
+  api: {
+    apiKey: "3f8fde3fd0decdbfe7525e780646eed0",
+    apiURL: "https://api.themoviedb.org/3/",
+  },
 };
 
 // fetching data from TMDB API
 const fetchAPIData = async (endpoint) => {
-  const API_KEY = "3f8fde3fd0decdbfe7525e780646eed0";
-  const API_URL = "https://api.themoviedb.org/3/";
+  const API_KEY = global.api.apiKey;
+  const API_URL = global.api.apiURL;
 
   showSpinner();
 
   const response = await fetch(
     `${API_URL}${endpoint}?api_key=${API_KEY}&language=en-US`
+  );
+  const data = await response.json();
+
+  hideSpinner();
+  return data;
+};
+
+//make request to search
+const searchAPIData = async () => {
+  const API_KEY = global.api.apiKey;
+  const API_URL = global.api.apiURL;
+
+  showSpinner();
+
+  const response = await fetch(
+    `${API_URL}search/${global.search.type}?api_key=${API_KEY}&language=en-US&query=${global.search.term}&page=${global.search.page}`
   );
   const data = await response.json();
 
@@ -296,6 +323,124 @@ const initSwiper = () => {
   });
 };
 
+// search movie/tv-show
+const search = async () => {
+  const queryString = window.location.search;
+  const urlParams = new URLSearchParams(queryString);
+
+  // global variable = method get() from new URLSearchParams() obj
+  global.search.type = urlParams.get("type");
+  global.search.term = urlParams.get("search-term");
+
+  if (global.search.term !== "" && global.search.term !== null) {
+    const { results, total_pages, page, total_results } = await searchAPIData();
+
+    global.search.page = page;
+    global.search.totalPages = total_pages;
+    global.search.totalResults = total_results;
+
+    if (results.length === 0) {
+      showAlert("No result found");
+      return;
+    }
+
+    displaySearchResults(results);
+
+    document.querySelector("#search-term").value = "";
+  } else {
+    showAlert("Please enter a search term");
+  }
+};
+
+const displaySearchResults = (results) => {
+  // clear previous results
+  document.querySelector("#search-results").innerHTML = "";
+  document.querySelector("#search-results-heading").innerHTML = "";
+  document.querySelector("#pagination").innerHTML = "";
+
+  results.forEach((result) => {
+    const div = document.createElement("div");
+    div.classList.add("card");
+    div.innerHTML = `<a href="${global.search.type}-details.html?id=${
+      result.id
+    }">
+            ${
+              result.poster_path
+                ? `<img
+              src="https://image.tmdb.org/t/p/w500/${result.poster_path}"
+              class="card-img-top"
+              alt="${
+                global.search.type === "movie" ? result.title : result.name
+              }"
+            />`
+                : `<img
+              src="images/no-image.jpg"
+              class="card-img-top"
+              alt="${
+                global.search.type === "movie" ? result.title : result.name
+              }"
+            />`
+            }
+          </a>
+          <div class="card-body">
+            <h5 class="card-title">${
+              global.search.type === "movie" ? result.title : result.name
+            }</h5>
+            <p class="card-text">
+              <small class="text-muted">Release: ${
+                global.search.type === "movie"
+                  ? result.release_date
+                  : result.first_air_date
+              }</small>
+            </p>
+          </div>`;
+
+    document.getElementById(
+      "search-results-heading"
+    ).innerHTML = `<h2>${results.length} of ${global.search.totalResults} results for ${global.search.term}</h2>`;
+
+    document.querySelector("#search-results").appendChild(div);
+  });
+
+  displayPagination();
+};
+
+// pagination for search
+const displayPagination = () => {
+  const div = document.createElement("div");
+  div.classList.add("pagination");
+  div.innerHTML = `
+          <button class="btn btn-primary" id="prev">Prev</button>
+          <button class="btn btn-primary" id="next">Next</button>
+          <div class="page-counter">Page ${global.search.page} of ${global.search.totalPages}</div>
+  `;
+
+  document.getElementById("pagination").appendChild(div);
+
+  // disable prev button if it's a 1st page
+  if (global.search.page === 1) {
+    document.getElementById("prev").disabled = true;
+  }
+  // disabled next button if it's the last page
+  if (global.search.page === global.search.totalPages) {
+    document.getElementById("next").disabled = true;
+  }
+
+  // next page
+  document.getElementById("next").addEventListener("click", async () => {
+    global.search.page++;
+    const { results, total_pages } = await searchAPIData();
+    displaySearchResults(results);
+  });
+
+  // previous page
+  document.getElementById("prev").addEventListener("click", async () => {
+    global.search.page--;
+    const { results, total_pages } = await searchAPIData();
+    displaySearchResults(results);
+  });
+};
+
 // Highlight active nav links
 const highlightActiveLink = () => {
   const navLinks = document.querySelectorAll(".nav-link");
@@ -312,6 +457,17 @@ const addCommasToNumber = (number) => {
   return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
+// show alert
+const showAlert = (message, className = "error") => {
+  const alertEl = document.createElement("div");
+  alertEl.classList.add("alert", className);
+  alertEl.appendChild(document.createTextNode(message));
+
+  document.getElementById("alert").appendChild(alertEl);
+
+  setTimeout(() => alertEl.remove(), 3000);
+};
+
 // Init app
 // vanilla router
 const init = () => {
@@ -325,7 +481,7 @@ const init = () => {
       displayMovieDetails();
       break;
     case "/search.html":
-      console.log("Search");
+      search();
       break;
     case "/shows.html":
       displayPopularShows();
