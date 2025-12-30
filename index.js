@@ -472,6 +472,7 @@ const showAlert = (message, className = "error") => {
 // vanilla router
 const init = () => {
   switch (global.currentPage) {
+    case "":
     case "index.html":
       displayPopularMovies();
       displaySlider();
